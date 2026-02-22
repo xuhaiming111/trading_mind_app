@@ -28,12 +28,12 @@ const DEFAULT_PLANS = [
 router.get('/', authMiddleware, async (req, res) => {
   try {
     // 查找用户设置，如果不存在则创建默认设置
-    let settings = await UserSettings.findOne({ userId: req.userId });
+    let settings = await UserSettings.findOne({ userId: req.user.userId });
     
     if (!settings) {
       // 创建默认设置
       settings = new UserSettings({
-        userId: req.userId,
+        userId: req.user.userId,
         tradingHomework: DEFAULT_HOMEWORK,
         tradingPlans: DEFAULT_PLANS
       });
@@ -83,12 +83,12 @@ router.put('/principles', authMiddleware, async (req, res) => {
     const { presetPrinciples, customPrinciples } = req.body;
     
     // 查找或创建用户设置
-    let settings = await UserSettings.findOne({ userId: req.userId });
+    let settings = await UserSettings.findOne({ userId: req.user.userId });
     
     if (!settings) {
       // 新用户，创建完整的默认设置
       settings = new UserSettings({
-        userId: req.userId,
+        userId: req.user.userId,
         tradingHomework: DEFAULT_HOMEWORK,
         tradingPlans: DEFAULT_PLANS
       });
@@ -138,11 +138,11 @@ router.put('/homework', authMiddleware, async (req, res) => {
     }
     
     // 查找或创建用户设置
-    let settings = await UserSettings.findOne({ userId: req.userId });
+    let settings = await UserSettings.findOne({ userId: req.user.userId });
     
     if (!settings) {
       settings = new UserSettings({
-        userId: req.userId,
+        userId: req.user.userId,
         tradingHomework: DEFAULT_HOMEWORK,
         tradingPlans: DEFAULT_PLANS
       });
@@ -187,11 +187,11 @@ router.put('/plans', authMiddleware, async (req, res) => {
     }
     
     // 查找或创建用户设置
-    let settings = await UserSettings.findOne({ userId: req.userId });
+    let settings = await UserSettings.findOne({ userId: req.user.userId });
     
     if (!settings) {
       settings = new UserSettings({
-        userId: req.userId,
+        userId: req.user.userId,
         tradingHomework: DEFAULT_HOMEWORK,
         tradingPlans: DEFAULT_PLANS
       });
@@ -236,11 +236,11 @@ router.post('/homework', authMiddleware, async (req, res) => {
     }
     
     // 查找或创建用户设置
-    let settings = await UserSettings.findOne({ userId: req.userId });
+    let settings = await UserSettings.findOne({ userId: req.user.userId });
     
     if (!settings) {
       settings = new UserSettings({
-        userId: req.userId,
+        userId: req.user.userId,
         tradingHomework: DEFAULT_HOMEWORK,
         tradingPlans: DEFAULT_PLANS
       });
@@ -289,11 +289,11 @@ router.post('/plans', authMiddleware, async (req, res) => {
     }
     
     // 查找或创建用户设置
-    let settings = await UserSettings.findOne({ userId: req.userId });
+    let settings = await UserSettings.findOne({ userId: req.user.userId });
     
     if (!settings) {
       settings = new UserSettings({
-        userId: req.userId,
+        userId: req.user.userId,
         tradingHomework: DEFAULT_HOMEWORK,
         tradingPlans: DEFAULT_PLANS
       });
@@ -343,7 +343,7 @@ router.put('/homework/:id', authMiddleware, async (req, res) => {
     }
     
     // 查找用户设置
-    const settings = await UserSettings.findOne({ userId: req.userId });
+    const settings = await UserSettings.findOne({ userId: req.user.userId });
     
     if (!settings) {
       return res.json({
@@ -402,7 +402,7 @@ router.put('/plans/:id', authMiddleware, async (req, res) => {
     }
     
     // 查找用户设置
-    const settings = await UserSettings.findOne({ userId: req.userId });
+    const settings = await UserSettings.findOne({ userId: req.user.userId });
     
     if (!settings) {
       return res.json({
@@ -452,7 +452,7 @@ router.delete('/homework/:id', authMiddleware, async (req, res) => {
     const { id } = req.params;
     
     // 查找用户设置
-    const settings = await UserSettings.findOne({ userId: req.userId });
+    const settings = await UserSettings.findOne({ userId: req.user.userId });
     
     if (!settings) {
       return res.json({
@@ -501,7 +501,7 @@ router.delete('/plans/:id', authMiddleware, async (req, res) => {
     const { id } = req.params;
     
     // 查找用户设置
-    const settings = await UserSettings.findOne({ userId: req.userId });
+    const settings = await UserSettings.findOne({ userId: req.user.userId });
     
     if (!settings) {
       return res.json({
