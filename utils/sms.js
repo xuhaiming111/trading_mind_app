@@ -8,12 +8,12 @@
 const crypto = require('crypto');
 const https = require('https');
 
-// 阿里云短信配置
+// 阿里云短信配置（从环境变量读取，确保安全）
 const SMS_CONFIG = {
-  accessKeyId: process.env.SMS_ACCESS_KEY_ID || 'LTAI5tEW3nCt5UkpJFcc3rxV',
-  accessKeySecret: process.env.SMS_ACCESS_KEY_SECRET || 'GhBjlxyMCYxfmsL22tgv322hoGyAXC',
-  signName: 'TradingMind',           // 短信签名
-  templateCode: 'SMS_332215523'      // 短信模板CODE
+  accessKeyId: process.env.SMS_ACCESS_KEY_ID,
+  accessKeySecret: process.env.SMS_ACCESS_KEY_SECRET,
+  signName: process.env.SMS_SIGN_NAME || 'TradingMind',
+  templateCode: process.env.SMS_TEMPLATE_CODE || 'SMS_332215523'
 };
 
 // 存储验证码（实际生产环境应该用 Redis）
@@ -52,6 +52,15 @@ function sign(params, secret) {
 async function sendSmsCode(phone) {
   return new Promise((resolve) => {
     try {
+      // 检查配置是否完整
+      if (!SMS_CONFIG.accessKeyId || !SMS_CONFIG.accessKeySecret) {
+        console.error('短信配置缺失，请在环境变量中配置 SMS_ACCESS_KEY_ID 和 SMS_ACCESS_KEY_SECRET');
+        return resolve({
+          success: false,
+          message: '短信服务未配置'
+        });
+      }
+      
       // 生成验证码
       const code = generateCode();
       
