@@ -3,39 +3,38 @@
  * 用户路由 (User Routes)
  * ========================================
  * 这个文件处理所有用户相关的接口：
- * 1. POST /api/user/register - 用户注册（手机号）
- * 2. POST /api/user/login    - 用户登录（手机号）
- * 3. GET  /api/user/info     - 获取用户信息（需要登录）
+ * 1. POST /api/user/send-code  - 发送短信验证码
+ * 2. POST /api/user/register   - 用户注册（需要验证码）
+ * 3. POST /api/user/login      - 用户登录
+ * 4. GET  /api/user/info       - 获取用户信息（需要登录）
  */
 
 const express = require('express');
-const jwt = require('jsonwebtoken');    // JWT 用于生成登录凭证 token
-const User = require('../models/User'); // 引入用户模型
-const authMiddleware = require('../middleware/auth'); // 引入认证中间件
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+const authMiddleware = require('../middleware/auth');
+const { sendSmsCode, verifySmsCode } = require('../utils/sms');
 
-// 创建路由器
 const router = express.Router();
 
-// ============ 接口1：用户注册 ============
+// ============ 接口1：发送短信验证码 ============
 // 请求方式: POST
-// 请求地址: /api/user/register
-// 请求体: { username: "张三", phone: "13812345678", password: "123456" }
+// 请求地址: /api/user/send-code
+// 请求体: { phone: "13812345678" }
 
-router.post('/register', async (req, res) => {
+router.post('/send-code', async (req, res) => {
   try {
-    // 1. 从请求体中获取用户提交的数据
-    const { username, phone, password } = req.body;
+    const { phone } = req.body;
     
-    // 2. 参数校验 - 检查必填字段是否存在
-    if (!username || !phone || !password) {
+    // 验证手机号
+    if (!phone) {
       return res.json({
         code: 400,
-        message: '用户名、手机号和密码都是必填项',
+        message: '请输入手机号',
         data: null
       });
     }
     
-    // 3. 验证手机号格式（中国大陆11位手机号）
     const phoneRegex = /^1[3-9]\d{9}$/;
     if (!phoneRegex.test(phone)) {
       return res.json({
@@ -45,7 +44,64 @@ router.post('/register', async (req, res) => {
       });
     }
     
-    // 4. 检查用户名是否已被使用
+    // 发送验证码
+    const result = await sendSmsCode(phone);
+    
+    res.json({
+      code: result.success ? 200 : 400,
+      message: result.message,
+      data: null
+    });
+    
+  } catch (error) {
+    console.error('发送验证码错误:', error);
+    res.json({
+      code: 500,
+      message: '发送失败，请稍后重试',
+      data: null
+    });
+  }
+});
+
+// ============ 接口2：用户注册（需要验证码） ============
+// 请求方式: POST
+// 请求地址: /api/user/register
+// 请求体: { username: "张三", phone: "13812345678", password: "123456", code: "123456" }
+
+router.post('/register', async (req, res) => {
+  try {
+    const { username, phone, password, code } = req.body;
+    
+    // 参数校验
+    if (!username || !phone || !password || !code) {
+      return res.json({
+        code: 400,
+        message: '用户名、手机号、密码和验证码都是必填项',
+        data: null
+      });
+    }
+    
+    // 验证手机号格式
+    const phoneRegex = /^1[3-9]\d{9}$/;
+    if (!phoneRegex.test(phone)) {
+      return res.json({
+        code: 400,
+        message: '请输入正确的手机号',
+        data: null
+      });
+    }
+    
+    // 验证短信验证码
+    const verifyResult = verifySmsCode(phone, code);
+    if (!verifyResult.success) {
+      return res.json({
+        code: 400,
+        message: verifyResult.message,
+        data: null
+      });
+    }
+    
+    // 检查用户名是否已被使用
     const existingUsername = await User.findOne({ username });
     if (existingUsername) {
       return res.json({
@@ -55,7 +111,7 @@ router.post('/register', async (req, res) => {
       });
     }
     
-    // 5. 检查手机号是否已被注册
+    // 检查手机号是否已被注册
     const existingPhone = await User.findOne({ phone });
     if (existingPhone) {
       return res.json({
@@ -65,27 +121,22 @@ router.post('/register', async (req, res) => {
       });
     }
     
-    // 6. 创建新用户
-    // 密码会在 User 模型的 pre('save') 钩子中自动加密
+    // 创建新用户
     const user = new User({
       username,
       phone,
-      password   // 这里是明文密码，保存时会自动加密
+      password
     });
     
-    // 7. 保存到数据库
     await user.save();
     
-    // 8. 生成 JWT token（登录凭证）
-    // jwt.sign(数据, 密钥, 配置) 生成 token
-    // 数据里放 userId，这样后面可以通过 token 知道是哪个用户
+    // 生成 JWT token
     const token = jwt.sign(
-      { userId: user._id },           // 要存入 token 的数据
-      req.app.get('JWT_SECRET'),      // 从 app 获取密钥
-      { expiresIn: '7d' }             // token 7 天后过期
+      { userId: user._id },
+      req.app.get('JWT_SECRET'),
+      { expiresIn: '7d' }
     );
     
-    // 9. 返回成功结果
     res.json({
       code: 200,
       message: '注册成功',
@@ -95,12 +146,11 @@ router.post('/register', async (req, res) => {
           username: user.username,
           phone: user.phone
         },
-        token: token   // 前端需要保存这个 token
+        token: token
       }
     });
     
   } catch (error) {
-    // 捕获错误
     console.error('注册错误:', error);
     res.json({
       code: 500,
@@ -110,17 +160,15 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// ============ 接口2：用户登录 ============
+// ============ 接口3：用户登录 ============
 // 请求方式: POST
 // 请求地址: /api/user/login
 // 请求体: { phone: "13812345678", password: "123456" }
 
 router.post('/login', async (req, res) => {
   try {
-    // 1. 获取请求参数
     const { phone, password } = req.body;
     
-    // 2. 参数校验
     if (!phone || !password) {
       return res.json({
         code: 400,
@@ -129,8 +177,6 @@ router.post('/login', async (req, res) => {
       });
     }
     
-    // 3. 查找用户
-    // 根据手机号查找，找到返回用户文档，找不到返回 null
     const user = await User.findOne({ phone });
     
     if (!user) {
@@ -141,8 +187,6 @@ router.post('/login', async (req, res) => {
       });
     }
     
-    // 4. 验证密码
-    // 调用 User 模型中定义的 comparePassword 方法
     const isMatch = await user.comparePassword(password);
     
     if (!isMatch) {
@@ -153,14 +197,12 @@ router.post('/login', async (req, res) => {
       });
     }
     
-    // 5. 生成 token
     const token = jwt.sign(
       { userId: user._id },
       req.app.get('JWT_SECRET'),
       { expiresIn: '7d' }
     );
     
-    // 6. 返回成功结果
     res.json({
       code: 200,
       message: '登录成功',
@@ -184,15 +226,13 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// ============ 接口3：获取当前用户信息 ============
+// ============ 接口4：获取当前用户信息 ============
 // 请求方式: GET
 // 请求地址: /api/user/info
 // 请求头: Authorization: Bearer <token>
-// 这个接口需要登录后才能访问，所以使用 authMiddleware 中间件验证 token
 
 router.get('/info', authMiddleware, async (req, res) => {
   try {
-    // authMiddleware 验证成功后，会把用户信息放到 req.user 中
     const user = await User.findById(req.user.userId);
     
     if (!user) {
@@ -226,5 +266,4 @@ router.get('/info', authMiddleware, async (req, res) => {
   }
 });
 
-// 导出路由器
 module.exports = router;
