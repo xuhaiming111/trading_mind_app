@@ -11,6 +11,19 @@ const router = express.Router();
 const UserSettings = require('../models/UserSettings');
 const authMiddleware = require('../middleware/auth');
 
+// 默认的交易功课和计划（用于新用户或没有数据的老用户）
+const DEFAULT_HOMEWORK = [
+  { title: '判断情绪周期', content: '最高连扳数量，涨停个股数量，跌停个股数量' },
+  { title: '判断政策面', content: '' },
+  { title: '判断板块', content: '' }
+];
+
+const DEFAULT_PLANS = [
+  { title: '候选股票', content: '' },
+  { title: '买点计划', content: '' },
+  { title: '卖出计划', content: '' }
+];
+
 // ============ 接口1：获取用户设置 ============
 router.get('/', authMiddleware, async (req, res) => {
   try {
@@ -20,9 +33,28 @@ router.get('/', authMiddleware, async (req, res) => {
     if (!settings) {
       // 创建默认设置
       settings = new UserSettings({
-        userId: req.userId
+        userId: req.userId,
+        tradingHomework: DEFAULT_HOMEWORK,
+        tradingPlans: DEFAULT_PLANS
       });
       await settings.save();
+    } else {
+      // 对于已存在的用户，如果功课或计划为空，使用默认值
+      let needSave = false;
+      
+      if (!settings.tradingHomework || settings.tradingHomework.length === 0) {
+        settings.tradingHomework = DEFAULT_HOMEWORK;
+        needSave = true;
+      }
+      
+      if (!settings.tradingPlans || settings.tradingPlans.length === 0) {
+        settings.tradingPlans = DEFAULT_PLANS;
+        needSave = true;
+      }
+      
+      if (needSave) {
+        await settings.save();
+      }
     }
     
     res.json({
@@ -54,7 +86,12 @@ router.put('/principles', authMiddleware, async (req, res) => {
     let settings = await UserSettings.findOne({ userId: req.userId });
     
     if (!settings) {
-      settings = new UserSettings({ userId: req.userId });
+      // 新用户，创建完整的默认设置
+      settings = new UserSettings({
+        userId: req.userId,
+        tradingHomework: DEFAULT_HOMEWORK,
+        tradingPlans: DEFAULT_PLANS
+      });
     }
     
     // 更新预设原则选中状态
@@ -104,7 +141,11 @@ router.put('/homework', authMiddleware, async (req, res) => {
     let settings = await UserSettings.findOne({ userId: req.userId });
     
     if (!settings) {
-      settings = new UserSettings({ userId: req.userId });
+      settings = new UserSettings({
+        userId: req.userId,
+        tradingHomework: DEFAULT_HOMEWORK,
+        tradingPlans: DEFAULT_PLANS
+      });
     }
     
     // 更新交易功课
@@ -149,7 +190,11 @@ router.put('/plans', authMiddleware, async (req, res) => {
     let settings = await UserSettings.findOne({ userId: req.userId });
     
     if (!settings) {
-      settings = new UserSettings({ userId: req.userId });
+      settings = new UserSettings({
+        userId: req.userId,
+        tradingHomework: DEFAULT_HOMEWORK,
+        tradingPlans: DEFAULT_PLANS
+      });
     }
     
     // 更新交易计划
@@ -194,7 +239,11 @@ router.post('/homework', authMiddleware, async (req, res) => {
     let settings = await UserSettings.findOne({ userId: req.userId });
     
     if (!settings) {
-      settings = new UserSettings({ userId: req.userId });
+      settings = new UserSettings({
+        userId: req.userId,
+        tradingHomework: DEFAULT_HOMEWORK,
+        tradingPlans: DEFAULT_PLANS
+      });
     }
     
     // 添加新功课
@@ -243,7 +292,11 @@ router.post('/plans', authMiddleware, async (req, res) => {
     let settings = await UserSettings.findOne({ userId: req.userId });
     
     if (!settings) {
-      settings = new UserSettings({ userId: req.userId });
+      settings = new UserSettings({
+        userId: req.userId,
+        tradingHomework: DEFAULT_HOMEWORK,
+        tradingPlans: DEFAULT_PLANS
+      });
     }
     
     // 添加新计划
