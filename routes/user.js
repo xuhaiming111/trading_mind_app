@@ -3,10 +3,12 @@
  * 用户路由 (User Routes)
  * ========================================
  * 这个文件处理所有用户相关的接口：
- * 1. POST /api/user/send-code  - 发送短信验证码
- * 2. POST /api/user/register   - 用户注册（需要验证码）
- * 3. POST /api/user/login      - 用户登录
- * 4. GET  /api/user/info       - 获取用户信息（需要登录）
+ * 1. POST /api/user/send-code      - 发送短信验证码
+ * 2. POST /api/user/register       - 用户注册（只需手机号+验证码）
+ * 3. POST /api/user/login          - 用户登录
+ * 4. GET  /api/user/info           - 获取用户信息（需要登录）
+ * 5. PUT  /api/user/username       - 修改用户名（需要登录）
+ * 6. PUT  /api/user/password       - 修改密码（需要登录）
  */
 
 const express = require('express');
@@ -16,6 +18,15 @@ const authMiddleware = require('../middleware/auth');
 const { sendSmsCode, verifySmsCode } = require('../utils/sms');
 
 const router = express.Router();
+
+/**
+ * 生成随机用户名
+ * 格式：用户 + 8位随机数字
+ */
+function generateRandomUsername() {
+  const randomNum = Math.floor(10000000 + Math.random() * 90000000);
+  return `用户${randomNum}`;
+}
 
 // ============ 接口1：发送短信验证码 ============
 // 请求方式: POST
@@ -63,20 +74,21 @@ router.post('/send-code', async (req, res) => {
   }
 });
 
-// ============ 接口2：用户注册（需要验证码） ============
+// ============ 接口2：用户注册（简化版：只需手机号+验证码） ============
 // 请求方式: POST
 // 请求地址: /api/user/register
-// 请求体: { username: "张三", phone: "13812345678", password: "123456", code: "123456" }
+// 请求体: { phone: "13812345678", code: "123456" }
+// 说明：用户名自动生成，密码默认为 123456
 
 router.post('/register', async (req, res) => {
   try {
-    const { username, phone, password, code } = req.body;
+    const { phone, code } = req.body;
     
     // 参数校验
-    if (!username || !phone || !password || !code) {
+    if (!phone || !code) {
       return res.json({
         code: 400,
-        message: '用户名、手机号、密码和验证码都是必填项',
+        message: '手机号和验证码都是必填项',
         data: null
       });
     }
@@ -101,16 +113,6 @@ router.post('/register', async (req, res) => {
       });
     }
     
-    // 检查用户名是否已被使用
-    const existingUsername = await User.findOne({ username });
-    if (existingUsername) {
-      return res.json({
-        code: 400,
-        message: '用户名已被使用，请换一个',
-        data: null
-      });
-    }
-    
     // 检查手机号是否已被注册
     const existingPhone = await User.findOne({ phone });
     if (existingPhone) {
@@ -121,11 +123,18 @@ router.post('/register', async (req, res) => {
       });
     }
     
-    // 创建新用户
+    // 生成随机用户名
+    let username = generateRandomUsername();
+    // 确保用户名唯一
+    while (await User.findOne({ username })) {
+      username = generateRandomUsername();
+    }
+    
+    // 创建新用户（默认密码：123456）
     const user = new User({
       username,
       phone,
-      password
+      password: '123456'
     });
     
     await user.save();
@@ -261,6 +270,137 @@ router.get('/info', authMiddleware, async (req, res) => {
     res.json({
       code: 500,
       message: '获取用户信息失败',
+      data: null
+    });
+  }
+});
+
+// ============ 接口5：修改用户名 ============
+// 请求方式: PUT
+// 请求地址: /api/user/username
+// 请求头: Authorization: Bearer <token>
+// 请求体: { username: "新用户名" }
+
+router.put('/username', authMiddleware, async (req, res) => {
+  try {
+    const { username } = req.body;
+    
+    if (!username) {
+      return res.json({
+        code: 400,
+        message: '请输入新用户名',
+        data: null
+      });
+    }
+    
+    if (username.length < 2 || username.length > 20) {
+      return res.json({
+        code: 400,
+        message: '用户名长度需要在2-20个字符之间',
+        data: null
+      });
+    }
+    
+    // 检查用户名是否已被使用
+    const existingUser = await User.findOne({ username, _id: { $ne: req.user.userId } });
+    if (existingUser) {
+      return res.json({
+        code: 400,
+        message: '该用户名已被使用',
+        data: null
+      });
+    }
+    
+    // 更新用户名
+    const user = await User.findByIdAndUpdate(
+      req.user.userId,
+      { username },
+      { new: true }
+    );
+    
+    res.json({
+      code: 200,
+      message: '用户名修改成功',
+      data: {
+        user: {
+          id: user._id,
+          username: user.username,
+          phone: user.phone
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('修改用户名错误:', error);
+    res.json({
+      code: 500,
+      message: '修改失败: ' + error.message,
+      data: null
+    });
+  }
+});
+
+// ============ 接口6：修改密码 ============
+// 请求方式: PUT
+// 请求地址: /api/user/password
+// 请求头: Authorization: Bearer <token>
+// 请求体: { oldPassword: "旧密码", newPassword: "新密码" }
+
+router.put('/password', authMiddleware, async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    
+    if (!oldPassword || !newPassword) {
+      return res.json({
+        code: 400,
+        message: '请输入旧密码和新密码',
+        data: null
+      });
+    }
+    
+    if (newPassword.length < 6) {
+      return res.json({
+        code: 400,
+        message: '新密码至少需要6个字符',
+        data: null
+      });
+    }
+    
+    // 获取用户
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.json({
+        code: 404,
+        message: '用户不存在',
+        data: null
+      });
+    }
+    
+    // 验证旧密码
+    const isMatch = await user.comparePassword(oldPassword);
+    if (!isMatch) {
+      return res.json({
+        code: 400,
+        message: '旧密码错误',
+        data: null
+      });
+    }
+    
+    // 更新密码
+    user.password = newPassword;
+    await user.save();
+    
+    res.json({
+      code: 200,
+      message: '密码修改成功',
+      data: null
+    });
+    
+  } catch (error) {
+    console.error('修改密码错误:', error);
+    res.json({
+      code: 500,
+      message: '修改失败: ' + error.message,
       data: null
     });
   }
