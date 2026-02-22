@@ -6,6 +6,8 @@
  * 1. 连接 MongoDB 数据库
  * 2. 配置 Express 服务器
  * 3. 注册所有的 API 路由
+ * 
+ * 支持本地开发和 Render 云部署
  */
 
 // ============ 引入依赖包 ============
@@ -16,18 +18,17 @@ const cors = require('cors');           // CORS 允许前端跨域访问后端�
 // ============ 创建 Express 应用 ============
 const app = express();
 
-// ============ 配置项（你需要根据实际情况修改这里） ============
+// ============ 配置项 ============
 
-// 【重要】MongoDB 连接字符串
-// 本地数据库: 'mongodb://localhost:27017/trading_mind'
-// 当前使用本地数据库（云数据库网络不通，先用本地）
-const MONGODB_URI = 'mongodb://localhost:27017/trading_mind';
+// MongoDB 连接字符串
+// Render 部署时会从环境变量读取，本地开发时使用默认值
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/trading_mind';
 
-// 【重要】JWT 密钥 - 用于生成用户登录凭证，请修改为你自己的复杂字符串
-const JWT_SECRET = 'trading_mind_secret_key_2024_change_me';
+// JWT 密钥 - 用于生成用户登录凭证
+const JWT_SECRET = process.env.JWT_SECRET || 'QWEDSA123';
 
-// 服务器端口号
-const PORT = 3000;
+// 服务器端口号（Render 会自动设置 PORT 环境变量）
+const PORT = process.env.PORT || 3000;
 
 // 把配置挂载到 app 上，这样其他文件也能用
 app.set('JWT_SECRET', JWT_SECRET);
@@ -38,17 +39,14 @@ app.set('JWT_SECRET', JWT_SECRET);
 app.use(cors());
 
 // 解析请求体中的 JSON 数据
-// 比如前端发送 {"email": "test@qq.com"}, 后端就能通过 req.body.email 获取
 app.use(express.json());
 
 // ============ 注册路由 ============
 
 // 用户相关接口（注册、登录）
-// 访问路径: /api/user/register, /api/user/login
 app.use('/api/user', require('./routes/user'));
 
 // 签到相关接口
-// 访问路径: /api/checkin/...
 app.use('/api/checkin', require('./routes/checkin'));
 
 // 根路由 - 用来测试服务器是否正常运行
@@ -66,27 +64,17 @@ app.get('/', (req, res) => {
 // ============ 连接数据库并启动服务器 ============
 
 console.log('正在连接 MongoDB 数据库...');
+console.log('环境:', process.env.NODE_ENV || 'development');
 
-// mongoose.connect() 连接数据库，返回一个 Promise
 mongoose.connect(MONGODB_URI)
   .then(() => {
-    // 连接成功后执行
     console.log('✅ MongoDB 数据库连接成功！');
     
-    // 启动 HTTP 服务器，监听指定端口
-    app.listen(PORT, () => {
-      console.log(`✅ 服务器已启动！`);
-      console.log(`👉 访问地址: http://localhost:${PORT}`);
-      console.log(`👉 用户接口: http://localhost:${PORT}/api/user`);
-      console.log(`👉 签到接口: http://localhost:${PORT}/api/checkin`);
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`✅ 服务器已启动，端口: ${PORT}`);
     });
   })
   .catch((error) => {
-    // 连接失败
     console.error('❌ MongoDB 连接失败:', error.message);
-    console.log('请检查：');
-    console.log('1. MongoDB 连接字符串是否正确');
-    console.log('2. 网络是否能访问 MongoDB Atlas');
-    console.log('3. 数据库用户名密码是否正确');
-    process.exit(1); // 退出程序
+    process.exit(1);
   });
