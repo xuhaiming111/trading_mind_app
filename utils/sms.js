@@ -8,6 +8,9 @@
 const crypto = require('crypto');
 const https = require('https');
 
+// 模拟模式开关（true = 使用固定验证码123456，false = 使用阿里云短信）
+const USE_MOCK_MODE = process.env.SMS_MOCK_MODE !== 'false';
+
 // 阿里云短信配置（从环境变量读取，确保安全）
 const SMS_CONFIG = {
   accessKeyId: process.env.SMS_ACCESS_KEY_ID,
@@ -52,6 +55,25 @@ function sign(params, secret) {
 async function sendSmsCode(phone) {
   return new Promise((resolve) => {
     try {
+      // ========== 模拟模式 ==========
+      // 验证码固定为 123456，方便测试
+      if (USE_MOCK_MODE) {
+        const mockCode = '123456';
+        console.log(`[模拟模式] 手机号: ${phone}, 验证码: ${mockCode}`);
+        
+        // 存储验证码，5分钟有效
+        verificationCodes.set(phone, {
+          code: mockCode,
+          expireAt: Date.now() + 5 * 60 * 1000
+        });
+        
+        return resolve({
+          success: true,
+          message: '验证码已发送（测试模式：123456）'
+        });
+      }
+      
+      // ========== 正式模式（阿里云短信） ==========
       // 检查配置是否完整
       if (!SMS_CONFIG.accessKeyId || !SMS_CONFIG.accessKeySecret) {
         console.error('短信配置缺失，请在环境变量中配置 SMS_ACCESS_KEY_ID 和 SMS_ACCESS_KEY_SECRET');
