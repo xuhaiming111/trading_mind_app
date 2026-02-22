@@ -49,6 +49,9 @@ app.use('/api/user', require('./routes/user'));
 // 签到相关接口
 app.use('/api/checkin', require('./routes/checkin'));
 
+// 用户设置接口（交易原则、功课、计划）
+app.use('/api/settings', require('./routes/settings'));
+
 // 根路由 - 用来测试服务器是否正常运行
 app.get('/', (req, res) => {
   res.json({
