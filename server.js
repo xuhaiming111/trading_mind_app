@@ -52,6 +52,9 @@ app.use('/api/checkin', require('./routes/checkin'));
 // 用户设置接口（交易原则、功课、计划）
 app.use('/api/settings', require('./routes/settings'));
 
+// 每日记录接口（交易计划、交易感悟）
+app.use('/api/daily', require('./routes/daily'));
+
 // 根路由 - 用来测试服务器是否正常运行
 app.get('/', (req, res) => {
   res.json({
