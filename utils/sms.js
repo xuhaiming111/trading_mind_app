@@ -8,15 +8,18 @@
 const crypto = require('crypto');
 const https = require('https');
 
-// 模拟模式开关（true = 使用固定验证码123456，false = 使用阿里云短信）
-const USE_MOCK_MODE = process.env.SMS_MOCK_MODE !== 'false';
+// 模拟模式：仅当明确为 'false'（字符串）时关闭，其余情况均为模拟
+const _smsMockEnv = (process.env.SMS_MOCK_MODE || '').toLowerCase();
+const USE_MOCK_MODE = _smsMockEnv !== 'false' && _smsMockEnv !== '0';
 
 // 阿里云短信配置（从环境变量读取，确保安全）
 const SMS_CONFIG = {
   accessKeyId: process.env.SMS_ACCESS_KEY_ID,
   accessKeySecret: process.env.SMS_ACCESS_KEY_SECRET,
-  signName: process.env.SMS_SIGN_NAME || 'TradingMind',
-  templateCode: process.env.SMS_TEMPLATE_CODE || 'SMS_332215523'
+  signName: process.env.SMS_SIGN_NAME || '',
+  templateCode: process.env.SMS_TEMPLATE_CODE || '',
+  // 模板变量名，需与阿里云模板里的变量一致（常见为 code 或 verification_code）
+  templateParamName: process.env.SMS_TEMPLATE_PARAM_NAME || 'code'
 };
 
 // 存储验证码（实际生产环境应该用 Redis）
@@ -82,9 +85,17 @@ async function sendSmsCode(phone) {
           message: '短信服务未配置'
         });
       }
+      if (!SMS_CONFIG.signName || !SMS_CONFIG.templateCode) {
+        console.error('短信配置缺失，请配置 SMS_SIGN_NAME 和 SMS_TEMPLATE_CODE');
+        return resolve({
+          success: false,
+          message: '短信服务未配置'
+        });
+      }
       
       // 生成验证码
       const code = generateCode();
+      const templateParam = { [SMS_CONFIG.templateParamName]: code };
       
       // 构造请求参数
       const params = {
@@ -97,7 +108,7 @@ async function sendSmsCode(phone) {
         SignatureNonce: Math.random().toString(36).substring(2),
         SignatureVersion: '1.0',
         TemplateCode: SMS_CONFIG.templateCode,
-        TemplateParam: JSON.stringify({ code: code }),
+        TemplateParam: JSON.stringify(templateParam),
         Timestamp: new Date().toISOString().replace(/\.\d{3}/, ''),
         Version: '2017-05-25'
       };
@@ -198,8 +209,29 @@ function verifySmsCode(phone, code) {
   return { success: true, message: '验证成功' };
 }
 
+// 启动时打印当前短信模式（便于确认是否接入真实短信）
+if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV !== 'test') {
+  const mode = USE_MOCK_MODE ? '模拟（验证码固定 123456）' : '阿里云真实短信';
+  console.log('[短信] SMS_MOCK_MODE=', process.env.SMS_MOCK_MODE, '=> 当前模式:', mode);
+}
+
+/** 获取短信配置状态（不暴露密钥，仅用于排查 Render 环境变量是否生效） */
+function getSmsStatus() {
+  const raw = process.env.SMS_MOCK_MODE || '';
+  return {
+    mockMode: USE_MOCK_MODE,
+    rawSMS_MOCK_MODE: raw === '' ? '(未设置)' : raw,
+    hasAccessKey: !!SMS_CONFIG.accessKeyId,
+    hasSecret: !!SMS_CONFIG.accessKeySecret,
+    hasSignName: !!SMS_CONFIG.signName,
+    hasTemplateCode: !!SMS_CONFIG.templateCode,
+    smsReady: !USE_MOCK_MODE && !!SMS_CONFIG.accessKeyId && !!SMS_CONFIG.accessKeySecret && !!SMS_CONFIG.signName && !!SMS_CONFIG.templateCode
+  };
+}
+
 module.exports = {
   sendSmsCode,
   verifySmsCode,
-  generateCode
+  generateCode,
+  getSmsStatus
 };
