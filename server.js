@@ -10,6 +10,12 @@
  * 支持本地开发和 Render 云部署
  */
 
+// 优先加载 .env（从 backend 目录加载，避免从项目根启动时读不到）
+const path = require('path');
+try {
+  require('dotenv').config({ path: path.join(__dirname, '.env') });
+} catch (e) { /* dotenv 未安装时忽略 */ }
+
 // ============ 引入依赖包 ============
 const express = require('express');     // Express 是 Node.js 的 Web 框架，用来创建服务器和处理请求
 const mongoose = require('mongoose');   // Mongoose 是操作 MongoDB 数据库的工具
