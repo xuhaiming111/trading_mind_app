@@ -15,9 +15,19 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const authMiddleware = require('../middleware/auth');
-const { sendSmsCode, verifySmsCode } = require('../utils/sms');
+const { sendSmsCode, verifySmsCode, getSmsStatus } = require('../utils/sms');
 
 const router = express.Router();
+
+// ============ 调试：查看短信配置状态（Render 上可访问此接口确认环境变量是否生效） ============
+// GET /api/user/sms-status  返回 mockMode、rawSMS_MOCK_MODE、各配置是否已填（不返回密钥）
+router.get('/sms-status', (req, res) => {
+  res.json({
+    code: 200,
+    message: 'ok',
+    data: getSmsStatus()
+  });
+});
 
 /**
  * 生成随机用户名
